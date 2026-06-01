@@ -1,4 +1,3 @@
-
 const Donor = require("../models/donorModel");
 const { sendMail } = require("../utils/mailer");
 const { generateDonationCertificate } = require("../utils/certificate");
@@ -6,9 +5,18 @@ const Inventory = require("../models/inventoryModel");
 
 exports.recordDonation = async (req, res) => {
   try {
-    const { donorId, donationDate, quantity = 1, bloodGroup, expiryDate } = req.body;
+    const {
+      donorId,
+      donationDate,
+      quantity = 1,
+      bloodGroup,
+      expiryDate,
+    } = req.body;
     const donor = await Donor.findById(donorId);
-    if (!donor) return res.status(404).json({ success: false, message: "Donor not found" });
+    if (!donor)
+      return res
+        .status(404)
+        .json({ success: false, message: "Donor not found" });
 
     donor.lastDonationDate = donationDate || new Date();
     await donor.save();
@@ -30,17 +38,27 @@ exports.recordDonation = async (req, res) => {
       bloodGroup: donor.bloodGroup,
       donationDate: donor.lastDonationDate,
       certificateId,
-      hospitalName: "Blood Bank Management System"
+      hospitalName: "Blood Bank Management System",
     });
 
     if (donor.email) {
-      await sendMail({
-        to: donor.email,
-        subject: "Thank you for your blood donation",
-        text: `Dear ${donor.name}, thank you for donating blood. Your certificate is attached.`,
-        html: `<p>Dear <b>${donor.name}</b>,</p><p>Thank you for donating blood.</p><p>Certificate ID: <b>${certificateId}</b></p>`,
-        attachments: [{ filename: `certificate-${donor.name}.pdf`, content: pdfBuffer, contentType: "application/pdf" }]
-      });
+      try {
+        await sendMail({
+          to: donorEmail,
+          subject: "Blood Donation Certificate",
+          html: htmlContent,
+          attachments: [
+            {
+              filename: "certificate.pdf",
+              path: pdfPath,
+            },
+          ],
+        });
+
+        console.log("Certificate email sent");
+      } catch (error) {
+        console.error("Certificate email failed:", error.message);
+      }
     }
 
     res.status(200).json({
@@ -48,7 +66,7 @@ exports.recordDonation = async (req, res) => {
       message: "Donation recorded, inventory updated, and email sent",
       donor,
       unit,
-      certificateId
+      certificateId,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

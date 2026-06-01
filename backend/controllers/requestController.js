@@ -1,4 +1,3 @@
-//backend/controllers/requestController.js
 
 const Request = require("../models/requestModel");
 const Inventory = require("../models/inventoryModel");
@@ -37,19 +36,50 @@ exports.getMyRequests = async (req, res) => {
 exports.updateRequestStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    console.log("updateRequestStatus:", req.params.id, "->", status);
+
+    const VALID_STATUSES = ["Pending", "Approved", "Rejected", "Dispatched", "Completed"];
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` });
+    }
+
     const request = await Request.findById(req.params.id);
     if (!request) return res.status(404).json({ success: false, message: "Request not found" });
 
     if (status === "Approved") {
-      const inv = await Inventory.findOne({ bloodGroup: request.bloodGroup, quantity: { $gte: request.quantity } });
-      if (!inv) return res.status(400).json({ success: false, message: "Insufficient blood stock" });
-      inv.quantity -= request.quantity;
-      await inv.save();
+      // Sum total available stock across all matching units
+      const units = await Inventory.find({
+        bloodGroup: request.bloodGroup,
+        status: { $ne: "Expired" },
+        quantity: { $gt: 0 }
+      }).sort({ expiryDate: 1 }); // FIFO — oldest first
+
+      const totalAvailable = units.reduce((sum, u) => sum + u.quantity, 0);
+
+      if (totalAvailable < request.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock. Requested: ${request.quantity}, Available: ${totalAvailable} units of ${request.bloodGroup}`
+        });
+      }
+
+      // Deduct across units in FIFO order
+      let remaining = request.quantity;
+      for (const unit of units) {
+        if (remaining <= 0) break;
+        const deduct = Math.min(unit.quantity, remaining);
+        unit.quantity -= deduct;
+        if (unit.quantity === 0) unit.status = "Low Stock";
+        await unit.save();
+        remaining -= deduct;
+      }
     }
+
     request.status = status;
     await request.save();
-    res.json({ success: true, message: "Status updated", request });
+    res.json({ success: true, message: `Request ${status.toLowerCase()} successfully`, request });
   } catch (err) {
+    console.error("updateRequestStatus error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
