@@ -12,27 +12,55 @@ import TableBody from "@mui/material/TableBody";
 import Paper from "@mui/material/Paper";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
 
 const statusColors = {
-  Pending: "warning", Approved: "success", Rejected: "error",
-  Dispatched: "info", Completed: "default"
+  Pending: "warning",
+  Approved: "success",
+  Rejected: "error",
+  Dispatched: "info",
+  Completed: "default"
 };
 
 const BloodRequests = () => {
   const [requests, setRequests] = useState([]);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loadingId, setLoadingId] = useState(null);
 
-  const fetchRequests = () => API.get("/requests").then(res => setRequests(res.data.requests));
+  const fetchRequests = () =>
+    API.get("/requests")
+      .then(res => setRequests(res.data.requests || []))
+      .catch(() => setRequests([]));
+
   useEffect(() => { fetchRequests(); }, []);
 
   const updateStatus = async (id, status) => {
-    await API.put(`/requests/${id}/status`, { status });
-    fetchRequests();
+    try {
+      setLoadingId(`${id}-${status}`);
+      setError("");
+      setSuccess("");
+      await API.put(`/requests/${id}/status`, { status });
+      setSuccess(`Request ${status.toLowerCase()} successfully.`);
+      fetchRequests();
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to update status");
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   return (
-    <Container maxWidth="lg" style={{ marginTop: 32 }}>
-      <Typography variant="h5" gutterBottom style={{ color: "#c62828" }}>📋 Blood Requests</Typography>
-      <Paper>
+    <Container maxWidth="lg" style={{ marginTop: 32, marginBottom: 32 }}>
+      <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
+        <Typography variant="h5" style={{ color: "#c62828", fontWeight: 700 }}>📋 Blood Requests</Typography>
+      </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>{success}</Alert>}
+
+      <Paper elevation={2} sx={{ borderRadius: 3, overflow: "hidden" }}>
         <Table>
           <TableHead>
             <TableRow style={{ backgroundColor: "#ffebee" }}>
@@ -47,12 +75,14 @@ const BloodRequests = () => {
           </TableHead>
           <TableBody>
             {requests.map(r => (
-              <TableRow key={r._id}>
-                <TableCell>{r.hospitalId?.hospitalName}</TableCell>
+              <TableRow key={r._id} hover>
+                <TableCell>{r.hospitalId?.hospitalName || "-"}</TableCell>
                 <TableCell><b style={{ color: "#c62828" }}>{r.bloodGroup}</b></TableCell>
                 <TableCell>{r.quantity}</TableCell>
                 <TableCell>
-                  {r.emergency ? <Chip label="URGENT" color="error" size="small" /> : "No"}
+                  {r.emergency
+                    ? <Chip label="URGENT" color="error" size="small" />
+                    : <Typography variant="body2" color="text.secondary">No</Typography>}
                 </TableCell>
                 <TableCell>{r.reason || "-"}</TableCell>
                 <TableCell>
@@ -61,20 +91,46 @@ const BloodRequests = () => {
                 <TableCell>
                   {r.status === "Pending" && (
                     <>
-                      <Button size="small" color="success" onClick={() => updateStatus(r._id, "Approved")}
-                        style={{ marginRight: 4 }}>Approve</Button>
-                      <Button size="small" color="error" onClick={() => updateStatus(r._id, "Rejected")}>Reject</Button>
+                      <Button size="small" color="success" variant="text"
+                        disabled={loadingId === `${r._id}-Approved`}
+                        onClick={() => updateStatus(r._id, "Approved")}
+                        sx={{ mr: 1, fontWeight: 700 }}>
+                        {loadingId === `${r._id}-Approved` ? "..." : "Approve"}
+                      </Button>
+                      <Button size="small" color="error" variant="text"
+                        disabled={loadingId === `${r._id}-Rejected`}
+                        onClick={() => updateStatus(r._id, "Rejected")}
+                        sx={{ fontWeight: 700 }}>
+                        {loadingId === `${r._id}-Rejected` ? "..." : "Reject"}
+                      </Button>
                     </>
                   )}
                   {r.status === "Approved" && (
-                    <Button size="small" color="info" onClick={() => updateStatus(r._id, "Dispatched")}>Dispatch</Button>
+                    <Button size="small" color="info" variant="text"
+                      disabled={loadingId === `${r._id}-Dispatched`}
+                      onClick={() => updateStatus(r._id, "Dispatched")}
+                      sx={{ fontWeight: 700 }}>
+                      {loadingId === `${r._id}-Dispatched` ? "..." : "Dispatch"}
+                    </Button>
                   )}
                   {r.status === "Dispatched" && (
-                    <Button size="small" onClick={() => updateStatus(r._id, "Completed")}>Complete</Button>
+                    <Button size="small" variant="text"
+                      disabled={loadingId === `${r._id}-Completed`}
+                      onClick={() => updateStatus(r._id, "Completed")}
+                      sx={{ fontWeight: 700 }}>
+                      {loadingId === `${r._id}-Completed` ? "..." : "Complete"}
+                    </Button>
                   )}
                 </TableCell>
               </TableRow>
             ))}
+            {requests.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                  No blood requests found.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Paper>

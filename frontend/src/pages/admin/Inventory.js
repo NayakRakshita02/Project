@@ -29,6 +29,13 @@ import Alert from "@mui/material/Alert";
 
 const BLOOD_GROUPS = ["A+","A-","B+","B-","AB+","AB-","O+","O-"];
 
+// ── Helper: add N days to a YYYY-MM-DD string ──
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+};
+
 const Inventory = () => {
   const [inventory, setInventory] = useState([]);
   const [donors, setDonors] = useState([]);
@@ -99,21 +106,32 @@ const Inventory = () => {
     }));
   };
 
+  // ── Auto-calculate expiry when collection date changes ──
+  const handleCollectionDateChange = (e) => {
+    const date = e.target.value;
+    setForm((prev) => ({
+      ...prev,
+      collectionDate: date,
+      expiryDate: date ? addDays(date, 42) : ""
+    }));
+  };
+
   const handleAdd = async () => {
     try {
       setLoading(true);
       setError("");
       setSuccess("");
 
+      const todayStr = new Date().toISOString().split("T")[0];
+      const collectionDate = form.collectionDate || todayStr;
+      const expiryDate = form.expiryDate || addDays(collectionDate, 42);
+
       const payload = {
         ...form,
+        collectionDate,
+        expiryDate,
         donorId: selectedDonor?._id || null
       };
-
-      if (!payload.collectionDate) payload.collectionDate = new Date().toISOString();
-      if (!payload.expiryDate) {
-        payload.expiryDate = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString();
-      }
 
       await API.post("/inventory", payload);
 
@@ -147,11 +165,7 @@ const Inventory = () => {
             Add units by selecting an already registered donor.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          onClick={() => setOpen(true)}
-          sx={{ backgroundColor: "#c62828", px: 3, py: 1.2 }}
-        >
+        <Button variant="contained" onClick={() => setOpen(true)} sx={{ backgroundColor: "#c62828", px: 3, py: 1.2 }}>
           + Add Blood Unit
         </Button>
       </Box>
@@ -186,9 +200,7 @@ const Inventory = () => {
                   <Chip label={item.status} color={getStatusColor(item.status)} size="small" />
                 </TableCell>
                 <TableCell>
-                  <Button size="small" color="error" onClick={() => handleDelete(item._id)}>
-                    Delete
-                  </Button>
+                  <Button size="small" color="error" onClick={() => handleDelete(item._id)}>Delete</Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -196,18 +208,11 @@ const Inventory = () => {
         </Table>
       </Paper>
 
-      <Dialog
-        open={open}
-        onClose={() => {
-          setOpen(false);
-          resetForm();
-        }}
-        fullWidth
-        maxWidth="md"
-      >
+      <Dialog open={open} onClose={() => { setOpen(false); resetForm(); }} fullWidth maxWidth="md">
         <DialogTitle sx={{ fontWeight: 700 }}>Add Blood Unit</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
+
             <Grid item xs={12} md={6}>
               <Autocomplete
                 options={filteredDonors}
@@ -228,11 +233,7 @@ const Inventory = () => {
                   </Box>
                 )}
                 renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Search Donor by Name / Email / Phone"
-                    placeholder="Type to search registered donors"
-                  />
+                  <TextField {...params} label="Search Donor by Name / Email / Phone" placeholder="Type to search registered donors" />
                 )}
               />
             </Grid>
@@ -241,11 +242,7 @@ const Inventory = () => {
               <TextField
                 fullWidth
                 label="Selected Donor"
-                value={
-                  selectedDonor
-                    ? `${selectedDonor.name} (${selectedDonor.email || selectedDonor.phone || "no contact"})`
-                    : "No donor selected"
-                }
+                value={selectedDonor ? `${selectedDonor.name} (${selectedDonor.email || selectedDonor.phone || "no contact"})` : "No donor selected"}
                 InputProps={{ readOnly: true }}
               />
             </Grid>
@@ -253,14 +250,8 @@ const Inventory = () => {
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Blood Group</InputLabel>
-                <Select
-                  value={form.bloodGroup}
-                  label="Blood Group"
-                  onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })}
-                >
-                  {BLOOD_GROUPS.map((bg) => (
-                    <MenuItem key={bg} value={bg}>{bg}</MenuItem>
-                  ))}
+                <Select value={form.bloodGroup} label="Blood Group" onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })}>
+                  {BLOOD_GROUPS.map((bg) => <MenuItem key={bg} value={bg}>{bg}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
@@ -282,7 +273,8 @@ const Inventory = () => {
                 type="date"
                 InputLabelProps={{ shrink: true }}
                 value={form.collectionDate}
-                onChange={(e) => setForm({ ...form, collectionDate: e.target.value })}
+                onChange={handleCollectionDateChange}
+                helperText="Expiry date will be set to 42 days after this"
               />
             </Grid>
 
@@ -293,51 +285,31 @@ const Inventory = () => {
                 type="date"
                 InputLabelProps={{ shrink: true }}
                 value={form.expiryDate}
-                onChange={(e) => setForm({ ...form, expiryDate: e.target.value })}
+                InputProps={{ readOnly: true }}
+                helperText="Auto-calculated (Collection + 42 days)"
+                sx={{ "& .MuiInputBase-root": { backgroundColor: "#f5f5f5" } }}
               />
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Donor Name"
-                value={form.donorName}
-                onChange={(e) => setForm({ ...form, donorName: e.target.value })}
-              />
+              <TextField fullWidth label="Donor Name" value={form.donorName} onChange={(e) => setForm({ ...form, donorName: e.target.value })} />
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Donor Phone"
-                value={form.donorPhone}
-                onChange={(e) => setForm({ ...form, donorPhone: e.target.value })}
-              />
+              <TextField fullWidth label="Donor Phone" value={form.donorPhone} onChange={(e) => setForm({ ...form, donorPhone: e.target.value })} />
             </Grid>
 
             <Grid item xs={12}>
               <Alert severity="info">
-                Select a registered donor to automatically update their last donation date and send certificate by email.
+                Select a registered donor to automatically update their last donation date and send certificate by email. Expiry date is automatically set to <b>42 days</b> from the collection date.
               </Alert>
             </Grid>
+
           </Grid>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={() => {
-              setOpen(false);
-              resetForm();
-            }}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleAdd}
-            disabled={loading}
-            sx={{ backgroundColor: "#c62828" }}
-          >
+          <Button onClick={() => { setOpen(false); resetForm(); }} disabled={loading}>Cancel</Button>
+          <Button variant="contained" onClick={handleAdd} disabled={loading} sx={{ backgroundColor: "#c62828" }}>
             {loading ? "Adding..." : "Add"}
           </Button>
         </DialogActions>
@@ -347,3 +319,4 @@ const Inventory = () => {
 };
 
 export default Inventory;
+

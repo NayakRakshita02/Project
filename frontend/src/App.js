@@ -14,6 +14,7 @@ import HospitalRequests from "./pages/hospital/HospitalRequests";
 import HospitalInventory from "./pages/hospital/HospitalInventory";
 import DonorDashboard from "./pages/donor/DonorDashboard";
 import Navbar from "./components/Navbar";
+import Home from "./pages/Home";
 
 function App() {
   return (
@@ -21,7 +22,7 @@ function App() {
       <Router>
         <Navbar />
         <Routes>
-          <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
