@@ -259,8 +259,10 @@ const Inventory = () => {
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                label="Quantity"
+                // label="Quantity"
+                label="Quantity (Units)"
                 type="number"
+                helperText="Enter number of blood units, not millilitres."
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
               />
